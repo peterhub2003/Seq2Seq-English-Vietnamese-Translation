@@ -1,0 +1,12 @@
+__pycache__/
+*.pt
+*.png
+.wandb/
+wandb/
+#datasets/
+processed_train.pt
+train.processed.en.txt
+train.processed.vi.txt
+verify_model.py
+verify_pipeline.py
+checkpoints/*.pt
