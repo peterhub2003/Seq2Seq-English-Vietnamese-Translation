@@ -46,6 +46,27 @@ python src/inference.py --text "Hello world" --checkpoint best_model.pt
 
 It will output the translation and save the attention map to `attention.png`.
 
+## Testing
+
+Evaluate the trained model on the test set (`tst2013`):
+
+```bash
+python src/test_model.py --checkpoint best_model.pt --output_file test_results.json
+```
+
+This will calculate the BLEU score and save the results (Source, Reference, Prediction) to `test_results.json`.
+
+## Results Visualization
+
+Inspect the test results and visualize Attention Maps using the viewer tool:
+
+```bash
+python src/result_viewer.py --results_file test_results.json
+```
+
+- **Option 1:** List samples (Source, Reference, Prediction).
+- **Option 2:** Select a sample index to re-run translation and generate/save the Attention Map.
+
 ## Data Processing Details
 
 - **HTML Entities:** Decoded (e.g., `&apos;` -> `'`).

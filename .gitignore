@@ -3,10 +3,13 @@ __pycache__/
 *.png
 .wandb/
 wandb/
-#datasets/
+.env
 processed_train.pt
 train.processed.en.txt
 train.processed.vi.txt
 verify_model.py
 verify_pipeline.py
-checkpoints/*.pt
+results/
+checkpoints/
+upload_to_hub.py
+

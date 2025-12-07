@@ -320,7 +320,7 @@ class Trainer:
             
             print(f'Epoch: {epoch:02} | Time: {int(epoch_mins)}m {int(epoch_secs)}s')
             print(f'\tTrain Loss: {train_loss:.3f} | Train Acc: {train_acc*100:.2f}%')
-            print(f'\t Val. Loss: {val_loss:.3f} |  Val. Acc: {val_acc*100:.2f}% | Val. BLEU: {val_bleu:.3f}')
+            print(f'\t Val. Loss: {val_loss:.3f} |  Val. Acc: {val_acc*100:.2f}% | Val. BLEU: {val_bleu*100:.2f}')
             
             # Save best model
             if val_loss < self.best_val_loss:

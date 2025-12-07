@@ -126,7 +126,14 @@ class Seq2Seq(nn.Module):
         self.encoder = encoder
         self.decoder = decoder
         self.device = device
-        
+
+    def init_weights(self, mean=0, std=0.01):
+        for name, param in self.named_parameters():
+            if 'weight' in name:
+                nn.init.normal_(param.data, mean=mean, std=std)
+            else:
+                nn.init.constant_(param.data, 0)
+                   
     def forward(self, src, trg, teacher_forcing_ratio=0.5):
         # src = [batch size, src len]
         # trg = [batch size, trg len]

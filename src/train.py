@@ -6,12 +6,9 @@ import os
 from .data_utils import build_dataloaders
 from .model import Encoder, Decoder, Attention, Seq2Seq
 from .trainer import Trainer, WandbLogger, ConsoleLogger, LocalCheckpointManager
-from pathlib import Path
+from .config import DATASETS_DIR, CHECKPOINTS_DIR
 
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
-DATASETS_DIR = f"{ROOT_DIR}/datasets/IWSLT'15 en-vi"
-CHECKPOINTS_DIR = f"{ROOT_DIR}/checkpoints" 
 
 def main():
 
@@ -59,14 +56,7 @@ def main():
     dec = Decoder(OUTPUT_DIM, args.emb_dim, args.hidden_dim, args.n_layers, args.dropout, attn)
     model = Seq2Seq(enc, dec, device).to(device)
     
-    def init_weights(m):
-        for name, param in m.named_parameters():
-            if 'weight' in name:
-                nn.init.normal_(param.data, mean=0, std=0.01)
-            else:
-                nn.init.constant_(param.data, 0)
-                
-    model.apply(init_weights)
+    model.init_weights(mean=0, std=0.01)    
     print(f'The model has {sum(p.numel() for p in model.parameters() if p.requires_grad):,} trainable parameters')
 
 
@@ -83,12 +73,13 @@ def main():
     else:
         logger = ConsoleLogger()
 
-
     checkpoint_manager = LocalCheckpointManager()
+    os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
     CKP_PATH = os.path.join(CHECKPOINTS_DIR, args.checkpoint_path)
     if args.load_checkpoint and os.path.exists(CKP_PATH):
         checkpoint_manager.load(CKP_PATH, model, optimizer)
         print("Resuming training from checkpoint...")
+
 
     # 5. Trainer
     trainer_config = {
@@ -119,7 +110,7 @@ def main():
     # 6. Start Training
     try:
         trainer.show_config()
-        trainer.train(args.epochs, save_path=args.checkpoint_path, en_vocab=en_vocab, vi_vocab=vi_vocab)
+        trainer.train(args.epochs, save_path=CKP_PATH, en_vocab=en_vocab, vi_vocab=vi_vocab)
     except KeyboardInterrupt:
         print("Training interrupted.")
     finally:
