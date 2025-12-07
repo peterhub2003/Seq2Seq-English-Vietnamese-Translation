@@ -21,6 +21,8 @@ def main():
     parser.add_argument('--batch_size', type=int, default=1, help='Batch size for testing (keep 1 for simple loop)')
     parser.add_argument('--beam_size', type=int, default=1, help='Beam size (1 for greedy)')
     parser.add_argument('--length_penalty_alpha', type=float, default=0.7, help='Length penalty alpha')
+    parser.add_argument('--bidirectional', action='store_true', help='Use bidirectional encoder')
+
     
     args = parser.parse_args()
     
@@ -41,10 +43,15 @@ def main():
     OUTPUT_DIM = len(vi_vocab)
     
     # 2. Model
-    attn = Attention(args.hidden_dim)
-    enc = Encoder(INPUT_DIM, args.emb_dim, args.hidden_dim, args.n_layers, args.dropout)
-    dec = Decoder(OUTPUT_DIM, args.emb_dim, args.hidden_dim, args.n_layers, args.dropout, attn)
+    ENC_HID_DIM = args.hidden_dim
+    DEC_HID_DIM = args.hidden_dim
+    ENC_OUTPUT_DIM = args.hidden_dim * 2 if args.bidirectional else args.hidden_dim
+    
+    attn = Attention(ENC_OUTPUT_DIM, DEC_HID_DIM)
+    enc = Encoder(INPUT_DIM, args.emb_dim, ENC_HID_DIM, args.n_layers, args.dropout, args.bidirectional)
+    dec = Decoder(OUTPUT_DIM, args.emb_dim, ENC_OUTPUT_DIM, DEC_HID_DIM, args.n_layers, args.dropout, attn)
     model = Seq2Seq(enc, dec, device).to(device)
+    
     
     CKP_PATH = os.path.join(CHECKPOINTS_DIR, args.checkpoint)
     if os.path.exists(CKP_PATH):

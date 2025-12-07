@@ -11,6 +11,8 @@ This project implements a Sequence-to-Sequence (Seq2Seq) model with Attention me
     - `train.py`: Training entry point.
     - `translator.py`: Inference logic.
     - `inference.py`: Inference entry point.
+    <!-- - `result_viewer.py`: Result viewer tool. -->
+    - `test_model.py`: Test model entry point.
 - `datasets/`: Dataset directory (IWSLT'15 en-vi).
 
 ## Setup
@@ -27,22 +29,34 @@ This project implements a Sequence-to-Sequence (Seq2Seq) model with Attention me
 Run the training script:
 
 ```bash
-python src/train.py --epochs 10 --batch_size 32 --use_wandb
+python src/train.py --epochs 20 --batch_size 64 --hidden_dim 512 --emb_dim 256 --bidirectional --use_wandb
 ```
 
 Arguments:
 - `--epochs`: Number of epochs (default: 10)
 - `--batch_size`: Batch size (default: 32)
+- `--hidden_dim`: Hidden dimension (default: 256)
+- `--emb_dim`: Embedding dimension (default: 128)
+- `--bidirectional`: Use Bidirectional Encoder (Recommended)
 - `--use_wandb`: Enable Weights & Biases logging.
-- `--checkpoint_path`: Path to save the best model (default: `best_model.pt`).
+- `--checkpoint_path`: Path to save the best model (default: `checkpoints/best_model.pt`).
 
 ## Inference
 
-Run the inference script to translate a sentence:
+Run the inference script to translate a sentence. You can choose between **Greedy Decoding** (default) or **Beam Search**.
 
 ```bash
-python src/inference.py --text "Hello world" --checkpoint best_model.pt
+# Greedy Decoding
+python src/inference.py --text "Hello world" --checkpoint checkpoints/best_model.pt --bidirectional
+
+# Beam Search (Better quality)
+python src/inference.py --text "Hello world" --checkpoint checkpoints/best_model.pt --bidirectional --beam_size 3
 ```
+
+Arguments:
+- `--beam_size`: Size of beam. Set to 1 for Greedy. (Default: 1)
+- `--length_penalty_alpha`: Alpha for length penalty in Beam Search (Default: 0.7)
+- `--bidirectional`: Must match the training configuration.
 
 It will output the translation and save the attention map to `attention.png`.
 
@@ -51,7 +65,7 @@ It will output the translation and save the attention map to `attention.png`.
 Evaluate the trained model on the test set (`tst2013`):
 
 ```bash
-python src/test_model.py --checkpoint best_model.pt --output_file test_results.json
+python src/test_model.py --checkpoint checkpoints/best_model.pt --output_file test_results.json --bidirectional --beam_size 3
 ```
 
 This will calculate the BLEU score and save the results (Source, Reference, Prediction) to `test_results.json`.
@@ -61,11 +75,24 @@ This will calculate the BLEU score and save the results (Source, Reference, Pred
 Inspect the test results and visualize Attention Maps using the viewer tool:
 
 ```bash
-python src/result_viewer.py --results_file test_results.json
+python src/result_viewer.py --results_file test_results.json --bidirectional
 ```
 
 - **Option 1:** List samples (Source, Reference, Prediction).
 - **Option 2:** Select a sample index to re-run translation and generate/save the Attention Map.
+
+<!-- ## Model Sharing (Hugging Face Hub)
+
+This project includes a built-in workflow to upload your trained model to Hugging Face Hub.
+
+**Upload:**
+```bash
+python src/upload_to_hub.py --checkpoint checkpoints/best_model.pt --repo_id your-username/seq2seq-en-vi
+```
+(Token is loaded from `HF_TOKEN` in `.env` file or passed via `--token`)
+
+**Workflow Documentation:**
+For detailed steps on uploading and loading the model from the Hub, see: `.agent/workflows/huggingface_upload.md` -->
 
 ## Data Processing Details
 
@@ -76,6 +103,6 @@ python src/result_viewer.py --results_file test_results.json
 
 ## Model Architecture
 
-- **Encoder:** GRU with Embedding and Dropout.
+- **Encoder:** GRU with Embedding and Dropout. Optionally **Bidirectional**.
 - **Decoder:** GRU with Attention (Bahdanau-style), Embedding, and Dropout.
 - **Attention:** Additive Attention.

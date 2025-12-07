@@ -27,6 +27,8 @@ def main():
     parser.add_argument('--project_name', type=str, default='seq2seq-en-vi', help='WandB project name')
     parser.add_argument('--checkpoint_path', type=str, default='best_model.pt', help='Path to save/load checkpoint')
     parser.add_argument('--load_checkpoint', action='store_true', help='Load from checkpoint if exists')
+    parser.add_argument('--bidirectional', action='store_true', help='Use bidirectional encoder')
+
 
     args = parser.parse_args()
     
@@ -51,9 +53,13 @@ def main():
 
 
     # 2. Model
-    attn = Attention(args.hidden_dim)
-    enc = Encoder(INPUT_DIM, args.emb_dim, args.hidden_dim, args.n_layers, args.dropout)
-    dec = Decoder(OUTPUT_DIM, args.emb_dim, args.hidden_dim, args.n_layers, args.dropout, attn)
+    ENC_HID_DIM = args.hidden_dim
+    DEC_HID_DIM = args.hidden_dim
+    ENC_OUTPUT_DIM = args.hidden_dim * 2 if args.bidirectional else args.hidden_dim
+    
+    attn = Attention(ENC_OUTPUT_DIM, DEC_HID_DIM)
+    enc = Encoder(INPUT_DIM, args.emb_dim, ENC_HID_DIM, args.n_layers, args.dropout, args.bidirectional)
+    dec = Decoder(OUTPUT_DIM, args.emb_dim, ENC_OUTPUT_DIM, DEC_HID_DIM, args.n_layers, args.dropout, attn)
     model = Seq2Seq(enc, dec, device).to(device)
     
     model.init_weights(mean=0, std=0.01)    
@@ -93,6 +99,7 @@ def main():
         'n_layers': args.n_layers,
         'dropout': args.dropout,
         'max_length': 100,
+        'bidirectional': args.bidirectional
     }
     
     trainer = Trainer(
