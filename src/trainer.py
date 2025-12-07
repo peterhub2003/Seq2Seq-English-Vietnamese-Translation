@@ -128,6 +128,19 @@ class Trainer:
         self.teacher_forcing_ratio = config.get('teacher_forcing_ratio', 0.5)
         self.best_val_loss = float('inf')
 
+    def show_config(self):
+        print("\n" + "="*30)
+        print("TRAINING CONFIGURATION")
+        print("="*30)
+        print(f"Device: {self.device}")
+        print(f"Model Parameters: {sum(p.numel() for p in self.model.parameters() if p.requires_grad):,}")
+        print(f"Optimizer: {self.optimizer.__class__.__name__}")
+        print(f"Criterion: {self.criterion.__class__.__name__}")
+        print("-" * 30)
+        for k, v in self.config.items():
+            print(f"{k}: {v}")
+        print("="*30 + "\n")
+
     def calculate_accuracy(self, output, target, ignore_index):
         # output = [batch size * trg len - 1, output dim]
         # target = [batch size * trg len - 1]
@@ -244,20 +257,14 @@ class Trainer:
         
         # Calculate BLEU
         try:
-            from torchtext.data.metrics import bleu_score
-            return bleu_score(outputs, targets)
+            from nltk.translate.bleu_score import corpus_bleu
+            # NLTK expects references as list of list of strings
+            # references: [[ref1a, ref1b], [ref2a]]
+            # hypotheses: [hyp1, hyp2]
+            return corpus_bleu(targets, outputs)
         except ImportError:
-            try:
-                from nltk.translate.bleu_score import corpus_bleu
-                # NLTK expects references as list of list of strings? 
-                # corpus_bleu(list_of_references, hypotheses)
-                # references: [[ref1a, ref1b], [ref2a]]
-                # hypotheses: [hyp1, hyp2]
-                return corpus_bleu(targets, outputs)
-            except ImportError:
-                print("BLEU score library not found (torchtext or nltk). Returning 0.")
-                return 0.0
-
+            print("NLTK not found. Please install it (pip install nltk) for BLEU score. Returning 0.")
+            return 0.0
 
     def evaluate(self, loader, en_vocab=None, vi_vocab=None):
         self.model.eval()

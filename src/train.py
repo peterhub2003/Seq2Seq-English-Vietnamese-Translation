@@ -20,8 +20,8 @@ def main():
     parser.add_argument('--epochs', type=int, default=10, help='Number of epochs')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--hidden_dim', type=int, default=256, help='Hidden dimension')
-    parser.add_argument('--emb_dim', type=int, default=128, help='Embedding dimension')
+    parser.add_argument('--hidden_dim', type=int, default=512, help='Hidden dimension')
+    parser.add_argument('--emb_dim', type=int, default=256, help='Embedding dimension')
     parser.add_argument('--n_layers', type=int, default=1, help='Number of layers')
     parser.add_argument('--dropout', type=float, default=0.5, help='Dropout rate')
     parser.add_argument('--clip', type=float, default=1.0, help='Gradient clipping')
@@ -83,9 +83,8 @@ def main():
     else:
         logger = ConsoleLogger()
 
+
     checkpoint_manager = LocalCheckpointManager()
-    
-    # Load Checkpoint if requested
     CKP_PATH = os.path.join(CHECKPOINTS_DIR, args.checkpoint_path)
     if args.load_checkpoint and os.path.exists(CKP_PATH):
         checkpoint_manager.load(CKP_PATH, model, optimizer)
@@ -94,7 +93,15 @@ def main():
     # 5. Trainer
     trainer_config = {
         'clip': args.clip,
-        'teacher_forcing_ratio': args.teacher_forcing
+        'teacher_forcing_ratio': args.teacher_forcing,
+        'batch_size': args.batch_size,
+        'epochs': args.epochs,
+        'learning_rate': args.lr,
+        'hidden_dim': args.hidden_dim,
+        'emb_dim': args.emb_dim,
+        'n_layers': args.n_layers,
+        'dropout': args.dropout,
+        'max_length': 100,
     }
     
     trainer = Trainer(
@@ -111,11 +118,11 @@ def main():
 
     # 6. Start Training
     try:
+        trainer.show_config()
         trainer.train(args.epochs, save_path=args.checkpoint_path, en_vocab=en_vocab, vi_vocab=vi_vocab)
     except KeyboardInterrupt:
         print("Training interrupted.")
     finally:
-        # If using ConsoleLogger, plot history at the end
         if isinstance(logger, ConsoleLogger):
             logger.plot_history()
 
