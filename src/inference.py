@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--beam_size', type=int, default=1, help='Beam size (1 for greedy)')
     parser.add_argument('--length_penalty_alpha', type=float, default=0.7, help='Length penalty alpha')
     parser.add_argument('--bidirectional', action='store_true', help='Use bidirectional encoder')
+    parser.add_argument('--no_repeat_ngram_size', type=int, default=0, help='Size of N-grams to prevent repetition (0 to disable)')
 
     args = parser.parse_args()
     
@@ -62,7 +63,7 @@ def main():
     if not text:
         text = input("Enter English sentence: ")
         
-    translation, attention, src_tokens = translator.translate_sentence(text, beam_size=args.beam_size, length_penalty_alpha=args.length_penalty_alpha)
+    translation, attention, src_tokens = translator.translate_sentence(text, beam_size=args.beam_size, length_penalty_alpha=args.length_penalty_alpha, no_repeat_ngram_size=args.no_repeat_ngram_size)
     
     print(f"\nInput: {text}")
     print(f"Translation: {translation}")

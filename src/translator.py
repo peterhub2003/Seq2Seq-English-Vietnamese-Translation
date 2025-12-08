@@ -63,7 +63,6 @@ class Translator:
             candidates = []
             
             for score, trg_seq, hid, attns in beams:
-                # If sequence already ended, push to completed and skip
                 if trg_seq[-1] == self.vi_vocab.lookup_token('</s>'):
                     completed_beams.append((score, trg_seq, hid, attns))
                     continue
@@ -78,24 +77,15 @@ class Translator:
 
                 # --- N-gram---
                 if no_repeat_ngram_size > 0:
-                     # Calculate banned tokens
-                     # We want to ban token 't' if the n-gram (..., t) has appeared already in trg_seq.
-                     # trg_seq is [s1, s2, ..., sk]
-                     # New candidate will be sk+1.
-                     # We check if (sk-(n-2), ..., sk, sk+1) matches any previous n-gram.
-                     # This means we look for the prefix (sk-(n-2), ..., sk) in the history.
-                     
-                     # Check if we have enough context
+
                      if len(trg_seq) >= no_repeat_ngram_size - 1:
                         prefix = tuple(trg_seq[-(no_repeat_ngram_size-1):])
                          
                         for i in range(len(trg_seq) - no_repeat_ngram_size + 1):
-                            # Existing n-gram start at i
-                            # The prefix of that n-gram is trg_seq[i : i + n - 1]
+
                             existing_prefix = tuple(trg_seq[i : i + no_repeat_ngram_size - 1])
                              
                             if existing_prefix == prefix:
-                                # The token that followed this prefix previously is banned
                                 banned_token = trg_seq[i + no_repeat_ngram_size - 1]
                                 log_probs[0, banned_token] = float('-inf')
 
@@ -116,8 +106,7 @@ class Translator:
             if not candidates:
                 break
                 
-            # Select Top K candidates globally
-            # Sort by score (descending)
+
             candidates.sort(key=lambda x: x[0], reverse=True)
             beams = candidates[:beam_size]
             
@@ -126,7 +115,7 @@ class Translator:
                 completed_beams.extend(beams)
                 break
         
-        # Add remaining active beams to completed list
+
         completed_beams.extend(beams)
         
         # Apply Length Penalty: score = log_prob / length^alpha
@@ -136,7 +125,6 @@ class Translator:
         
         for score, seq, _, attns in completed_beams:
             length = len(seq)
-            # Avoid division by zero, though seq usually has at least <s>
             lp = (length ** alpha) if length > 0 else 1.0
             avg_score = score / lp
             
@@ -146,8 +134,7 @@ class Translator:
         
         final_seq, final_attns = best_beam
         
-        # Convert attention list to tensor
-        # final_attns is list of [1, src_len] tensors
+
         if final_attns:
             final_attns_tensor = torch.cat(final_attns, dim=0).unsqueeze(1) # [trg_len, 1, src_len]
         else:

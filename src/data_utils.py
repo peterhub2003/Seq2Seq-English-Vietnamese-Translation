@@ -124,7 +124,6 @@ class IWSLTDataset(Dataset):
             data.append({
                 'src_len': len(src_idx),
                 'tgt_len': len(tgt_idx),
-                # We can add more stats here
             })
         return pd.DataFrame(data)
 
@@ -238,10 +237,7 @@ def build_dataloaders(config):
     test_en_path = os.path.join(dataset_dir, "tst2013.en.txt")
     test_vi_path = os.path.join(dataset_dir, "tst2013.vi.txt")
 
-    # processed_en_text_path = os.path.join(dataset_dir, "train.processed.en.txt")
-    # processed_vi_text_path = os.path.join(dataset_dir, "train.processed.vi.txt")
-    
-    #
+
     print("Loading vocabularies...")
     en_vocab = load_vocab(en_vocab_path)
     vi_vocab = load_vocab(vi_vocab_path)
@@ -252,34 +248,21 @@ def build_dataloaders(config):
         train_dataset = IWSLTDataset(train_en_path, train_vi_path, en_vocab, vi_vocab, max_length, use_gpu_processing=True)
         
         print("Creating Validation Dataset...")
-        # Validation usually doesn't need filtering by length as strictly, but for batching it helps.
         val_dataset = IWSLTDataset(val_en_path, val_vi_path, en_vocab, vi_vocab, max_length, use_gpu_processing=True)
     else:
         print("Creating Test Dataset...")
         test_dataset = IWSLTDataset(test_en_path, test_vi_path, en_vocab, vi_vocab, max_length, use_gpu_processing=True)
 
-    # train_dataset.export_to_text(
-    #     processed_en_text_path,
-    #     processed_vi_text_path
-    # )
 
-    # 3. Create DataLoaders
-    pad_idx = en_vocab.lookup_token('<pad>') # Assuming same pad index for both or handled
-    # Note: vi_vocab might have different pad index if we didn't force it. 
-    # Our Vocabulary class adds <pad> at the beginning, so it should be consistent if added in same order.
-    # But safer to get specific pad indices.
-    
-    # Actually collate_fn needs to know which pad_idx to use. 
-    # Usually we use the same index if possible, or we pad src and tgt separately.
-    # Our collate_fn takes one pad_idx. Let's check if they are same.
+
+    # Create DataLoaders
+    pad_idx = en_vocab.lookup_token('<pad>')
     en_pad = en_vocab.lookup_token('<pad>')
     vi_pad = vi_vocab.lookup_token('<pad>')
     
     if en_pad != vi_pad:
         print(f"Warning: <pad> index differs (En: {en_pad}, Vi: {vi_pad}). Using En pad for both in simple collate.")
-        # We should update collate_fn to handle separate pad indices if needed.
     
-    # Update collate_fn to handle separate pad indices
     collate_lambda = lambda b: collate_fn_separate(b, en_pad, vi_pad)
 
     train_loader = None

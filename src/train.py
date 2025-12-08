@@ -24,7 +24,7 @@ def main():
     parser.add_argument('--teacher_forcing', type=float, default=0.5, help='Teacher forcing ratio')
     parser.add_argument('--use_wandb', action='store_true', help='Use Weights & Biases for logging')
     parser.add_argument('--project_name', type=str, default='seq2seq-en-vi', help='WandB project name')
-    parser.add_argument('--checkpoint_path', type=str, default='best_model.pt', help='Path to save/load checkpoint')
+    parser.add_argument('--checkpoint', type=str, default='best_model.pt', help='Path to save/load checkpoint')
     parser.add_argument('--load_checkpoint', action='store_true', help='Load from checkpoint if exists')
     parser.add_argument('--bidirectional', action='store_true', help='Use bidirectional encoder')
 
@@ -79,7 +79,7 @@ def main():
 
     checkpoint_manager = LocalCheckpointManager()
     os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
-    CKP_PATH = os.path.join(CHECKPOINTS_DIR, args.checkpoint_path)
+    CKP_PATH = os.path.join(CHECKPOINTS_DIR, args.checkpoint)
     if args.load_checkpoint and os.path.exists(CKP_PATH):
         checkpoint_manager.load(CKP_PATH, model, optimizer)
         print("Resuming training from checkpoint...")

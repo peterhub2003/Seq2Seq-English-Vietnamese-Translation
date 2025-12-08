@@ -24,7 +24,7 @@ class ICheckpointManager(ABC):
     def load(self, path, model, optimizer): pass
 
 
-# ---------     Implementations   ---------
+
 class WandbLogger(ILogger):
     def __init__(self, project_name, config, name=None):
         try:
@@ -49,7 +49,6 @@ class ConsoleLogger(ILogger):
         self.history = {'train_loss': [], 'train_acc': [], 'val_loss': [], 'val_acc': [], 'val_bleu': []}
 
     def log_metrics(self, metrics, step):
-        # Store for plotting later
         for k, v in metrics.items():
             if k in self.history:
                 self.history[k].append(v)
@@ -165,33 +164,18 @@ class Trainer:
         
         for i, (src, trg) in enumerate(pbar):
             src = src.to(self.device)
-            trg = trg.to(self.device)
+            trg = trg.to(self.device) #[batch size, trg len]
             
             self.optimizer.zero_grad()
             
-            # trg = [batch size, trg len]
-            # output = [batch size, trg len, output dim]
+            # [batch size, trg len, output dim]
             output = self.model(src, trg, self.teacher_forcing_ratio)
-            
-            # trg = [batch size, trg len]
-            # output = [batch size, trg len, output dim]
-            
             output_dim = output.shape[-1]
             
-            # Discard the first token of output (which corresponds to <sos> input) 
-            # and first token of trg (which is <sos>)
-            # Actually, model output at t=0 corresponds to prediction for trg[1]
-            # Let's align carefully.
-            # Model forward loop:
-            #   input = trg[:, 0] (<sos>) -> output[:, 1] (prediction for trg[:, 1])
-            #   So output[:, 1:] aligns with trg[:, 1:]
-            #   output[:, 0] is 0s (initialized)
             
-            output = output[:, 1:].reshape(-1, output_dim)
-            trg = trg[:, 1:].reshape(-1)
+            output = output[:, 1:].reshape(-1, output_dim) # [(trg len - 1) * batch size, output dim]
+            trg = trg[:, 1:].reshape(-1) # [(trg len - 1) * batch size]
             
-            # trg = [(trg len - 1) * batch size]
-            # output = [(trg len - 1) * batch size, output dim]
             
             loss = self.criterion(output, trg)
             acc = self.calculate_accuracy(output, trg, self.criterion.ignore_index)
@@ -218,19 +202,13 @@ class Trainer:
             for src, trg in data_loader:
                 src = src.to(self.device)
                 trg = trg.to(self.device)
-                
-                # Generate output
+
                 # teacher_forcing_ratio = 0 to let model generate on its own
-                output = self.model(src, trg, 0) 
+                output = self.model(src, trg, 0) # [batch size, trg len, output dim]
                 
-                # output = [batch size, trg len, output dim]
-                # Get predicted tokens
                 preds = output.argmax(2) # [batch size, trg len]
                 
                 for i in range(preds.shape[0]):
-                    # Convert indices to words
-                    # Remove <sos> (if present in output logic, but output usually starts from trg[1])
-                    # Our model output aligns with trg[1:]
                     
                     pred_tokens = []
                     for idx in preds[i]:
@@ -243,8 +221,7 @@ class Trainer:
                     
                     # Target
                     trg_tokens = []
-                    # trg[i] includes <s> at start, we should skip it
-                    # And stop at </s>
+
                     for idx in trg[i]:
                         idx = idx.item()
                         if idx == vi_vocab.lookup_token('<s>'):
@@ -258,9 +235,6 @@ class Trainer:
         # Calculate BLEU
         try:
             from nltk.translate.bleu_score import corpus_bleu
-            # NLTK expects references as list of list of strings
-            # references: [[ref1a, ref1b], [ref2a]]
-            # hypotheses: [hyp1, hyp2]
             return corpus_bleu(targets, outputs)
         except ImportError:
             print("NLTK not found. Please install it (pip install nltk) for BLEU score. Returning 0.")

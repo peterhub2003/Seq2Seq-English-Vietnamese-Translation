@@ -28,7 +28,7 @@ class Encoder(nn.Module):
         
         if self.bidirectional:
             
-            # Reshape to [n_layers, 2, batch, hid]
+            # [n_layers, 2, batch, hid]
             hidden = hidden.view(self.n_layers, 2, -1, self.hid_dim)
             
             # Concatenate the two directions: [n_layers, batch, hid * 2]
@@ -52,8 +52,7 @@ class Attention(nn.Module):
         batch_size = encoder_outputs.shape[0]
         src_len = encoder_outputs.shape[1]
         
-        # Repeat decoder hidden state src_len times
-        # hidden = [batch size, src len, hid dim]
+        # [batch size, src len, hid dim]
         hidden = hidden.permute(1, 0, 2).repeat(1, src_len, 1)
         
 
@@ -72,8 +71,7 @@ class Decoder(nn.Module):
         
         self.embedding = nn.Embedding(output_dim, emb_dim)
         
-        # Input to GRU is [embedded input; weighted source context]
-        # Context comes from encoder_outputs, so it has size enc_hid_dim
+
         self.rnn = nn.GRU(enc_hid_dim + emb_dim, dec_hid_dim, n_layers, dropout=dropout, batch_first=True)
         
         self.fc_out = nn.Linear(enc_hid_dim + dec_hid_dim + emb_dim, output_dim)
@@ -88,7 +86,7 @@ class Decoder(nn.Module):
         
         embedded = self.dropout(self.embedding(input)) # [batch size, 1, emb dim]
         
-        # a = [batch size, 1, src len]
+        # [batch size, 1, src len]
         a = self.attention(hidden[-1].unsqueeze(0), encoder_outputs)
         a = a.unsqueeze(1)
         

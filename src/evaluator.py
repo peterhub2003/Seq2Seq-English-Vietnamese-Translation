@@ -55,10 +55,8 @@ class Evaluator:
 
                 pred_text, _, _ = self.translator.translate_sentence(src_text, beam_size=beam_size, length_penalty_alpha=length_penalty_alpha, no_repeat_ngram_size=no_repeat_ngram_size)
                 
-                # Prepare for BLEU
-                # ref: list of tokens
+
                 refs.append([trg_tokens])
-                # pred: list of tokens
                 preds.append(pred_text.split())
                 
                 if result_saver:

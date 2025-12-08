@@ -9,37 +9,44 @@ This project implements a Sequence-to-Sequence (Seq2Seq) model with Attention me
     - `model.py`: Seq2Seq model architecture (Encoder, Decoder, Attention).
     - `trainer.py`: Trainer class with logging and checkpointing.
     - `train.py`: Training entry point.
-    - `translator.py`: Inference logic.
+    - `translator.py`: Translation logic.
     - `inference.py`: Inference entry point.
-    <!-- - `result_viewer.py`: Result viewer tool. -->
-    - `test_model.py`: Test model entry point.
+    - `test.py`: Test model entry point.
+    - `visualize_attn_map .py`: Result viewer tool.
 - `datasets/`: Dataset directory (IWSLT'15 en-vi).
 
 ## Setup
 
-1. Install dependencies:
+1. **Prerequisite:** Ensure [uv](https://github.com/astral-sh/uv) is installed.
+
+2. Clone the repository:
    ```bash
-   pip install -r requirements.txt
+   git clone https://github.com/peterhub2003/Seq2Seq-English-Vietnamese-Translation.git
+   cd Seq2Seq-English-Vietnamese-Translation/
    ```
 
-2. (Optional) Install NLTK data if needed for BLEU score (though script handles basic import).
+3. Setup Python environment with uv:
+   ```bash
+   uv python pin 3.11
+   uv sync
+   ```
 
 ## Training
 
 Run the training script:
 
 ```bash
-python src/train.py --epochs 20 --batch_size 64 --hidden_dim 512 --emb_dim 256 --bidirectional --use_wandb
+uv run python -m src.train --epochs 20 --batch_size 64 --hidden_dim 512 --emb_dim 256 --bidirectional --checkpoint best_bi_model.pt
 ```
 
 Arguments:
 - `--epochs`: Number of epochs (default: 10)
 - `--batch_size`: Batch size (default: 32)
-- `--hidden_dim`: Hidden dimension (default: 256)
-- `--emb_dim`: Embedding dimension (default: 128)
+- `--hidden_dim`: Hidden dimension (default: 512)
+- `--emb_dim`: Embedding dimension (default: 256)
 - `--bidirectional`: Use Bidirectional Encoder (Recommended)
-- `--use_wandb`: Enable Weights & Biases logging.
-- `--checkpoint_path`: Path to save the best model (default: `checkpoints/best_model.pt`).
+- `--use_wandb`: Enable Weights & Biases logging. (Default using Console Logger)
+- `--checkpoint`: File to save the best model (default: `best_model.pt` if not using bidirectional).
 
 ## Inference
 
@@ -47,15 +54,16 @@ Run the inference script to translate a sentence. You can choose between **Greed
 
 ```bash
 # Greedy Decoding
-python src/inference.py --text "Hello world" --checkpoint checkpoints/best_model.pt --bidirectional
+uv run python -m src.inference --text "Hello world" --checkpoint best_bi_model.pt --bidirectional
 
-# Beam Search (Better quality)
-python src/inference.py --text "Hello world" --checkpoint checkpoints/best_model.pt --bidirectional --beam_size 3
+# Beam Search
+uv run python -m src.inference --text "Hello world" --checkpoint best_bi_model.pt --bidirectional --beam_size 3
 ```
 
 Arguments:
 - `--beam_size`: Size of beam. Set to 1 for Greedy. (Default: 1)
 - `--length_penalty_alpha`: Alpha for length penalty in Beam Search (Default: 0.7)
+- `--no_repeat_ngram_size`: Size of N-grams to prevent repetition. Set to 2 or 3 to fix word repetitions. (Default: 0 - Disabled)
 - `--bidirectional`: Must match the training configuration.
 
 It will output the translation and save the attention map to `attention.png`.
@@ -65,38 +73,25 @@ It will output the translation and save the attention map to `attention.png`.
 Evaluate the trained model on the test set (`tst2013`):
 
 ```bash
-python src/test_model.py --checkpoint checkpoints/best_model.pt --output_file test_results.json --bidirectional --beam_size 3
+uv run python -m src.test --checkpoint best_bi_model.pt --output_file test_results.json --bidirectional --beam_size 3 --no_repeat_ngram_size 2
 ```
 
-This will calculate the BLEU score and save the results (Source, Reference, Prediction) to `test_results.json`.
+This will calculate the BLEU score and save the results (Source, Reference, Prediction) to `test_results.json` in folder `results`.
 
 ## Results Visualization
 
 Inspect the test results and visualize Attention Maps using the viewer tool:
 
 ```bash
-python src/result_viewer.py --results_file test_results.json --bidirectional
+uv run python -m src.visualize_attn_map --results_file test_results.json --bidirectional --checkpoint best_bi_model.pt --beam_size 3 --no_repeat_ngram_size 2
 ```
 
-- **Option 1:** List samples (Source, Reference, Prediction).
-- **Option 2:** Select a sample index to re-run translation and generate/save the Attention Map.
+-  Select a sample index to re-run translation and generate/save the Attention Map.
 
-<!-- ## Model Sharing (Hugging Face Hub)
-
-This project includes a built-in workflow to upload your trained model to Hugging Face Hub.
-
-**Upload:**
-```bash
-python src/upload_to_hub.py --checkpoint checkpoints/best_model.pt --repo_id your-username/seq2seq-en-vi
-```
-(Token is loaded from `HF_TOKEN` in `.env` file or passed via `--token`)
-
-**Workflow Documentation:**
-For detailed steps on uploading and loading the model from the Hub, see: `.agent/workflows/huggingface_upload.md` -->
 
 ## Data Processing Details
 
-- **HTML Entities:** Decoded (e.g., `&apos;` -> `'`).
+
 - **Tokenization:** Space-based (pre-tokenized data).
 - **Vocab:** Provided vocab files are used. Smart casing lookup is implemented.
 - **Special Tokens:** `<unk>`, `<pad>`, `<s>`, `</s>` are handled.
