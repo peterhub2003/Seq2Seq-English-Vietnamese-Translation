@@ -67,7 +67,7 @@ def main():
     print(f"\nInput: {text}")
     print(f"Translation: {translation}")
     
-    # 4. Plot Attention
+
     translator.display_attention(src_tokens, translation, attention, save_path=args.save_attention)
 
 

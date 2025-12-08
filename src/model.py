@@ -20,34 +20,13 @@ class Encoder(nn.Module):
     def forward(self, src):
         # src = [batch size, src len]
         
-        embedded = self.dropout(self.embedding(src))
-        # embedded = [batch size, src len, emb dim]
+        embedded = self.dropout(self.embedding(src)) # [batch size, src len, emb dim]
         
         outputs, hidden = self.rnn(embedded)
         # outputs = [batch size, src len, hid dim * n directions]
         # hidden = [n layers * n directions, batch size, hid dim]
         
         if self.bidirectional:
-            # We need to reshape hidden to concatenate forward and backward hidden states
-            # hidden: [n_layers * 2, batch, hid] -> [2, n_layers, batch, hid]
-            # Wait, PyTorch organizes it as (layer1_fwd, layer1_bwd, layer2_fwd, layer2_bwd...)
-            
-            # For typical seq2seq simple usage (e.g. 1 layer), we often just concat the last layer's hidden states
-            # But let's do it generally for n_layers.
-            
-            # hidden is [n_layers * n_dirs, batch, hid]
-            # We want [n_layers, batch, hid * 2] then project to [n_layers, batch, hid] ??
-            # Actually, standard practice for attention seq2seq often maps only the last layer's hidden state 
-            # OR maps all layers.
-            # Let's project THE LAST HIDDEN state to initialize decoder. 
-            # Since Decoder expects matches in n_layers inputs?
-            # Standard PyTorch Seq2Seq tutorial maps: hidden = torch.tanh(self.fc(torch.cat((hidden[-2,:,:], hidden[-1,:,:]), dim = 1)))
-            # But that is for 1-layer decoder with 1-layer encoder?
-            # If we have N layers, we probably need to squash every pair.
-            
-            # Let's stick to the convention: Decoder has same n_layers as Encoder. 
-            # We need to supply [n_layers, batch, hid] to Decoder.
-            # Current Hidden [n_layers * 2, batch, hid]
             
             # Reshape to [n_layers, 2, batch, hid]
             hidden = hidden.view(self.n_layers, 2, -1, self.hid_dim)
@@ -55,8 +34,7 @@ class Encoder(nn.Module):
             # Concatenate the two directions: [n_layers, batch, hid * 2]
             hidden = torch.cat((hidden[:, 0, :, :], hidden[:, 1, :, :]), dim=2)
             
-            # Project back to [n_layers, batch, hid]
-            hidden = torch.tanh(self.fc(hidden))
+            hidden = torch.tanh(self.fc(hidden)) # [n_layers, batch, hid]
             
         return outputs, hidden
 
@@ -64,7 +42,6 @@ class Attention(nn.Module):
     def __init__(self, enc_hid_dim, dec_hid_dim):
         super().__init__()
         
-        # input dim = dec_hid_dim + enc_hid_dim
         self.attn = nn.Linear(enc_hid_dim + dec_hid_dim, dec_hid_dim)
         self.v = nn.Linear(dec_hid_dim, 1, bias=False)
         
@@ -79,17 +56,13 @@ class Attention(nn.Module):
         # hidden = [batch size, src len, hid dim]
         hidden = hidden.permute(1, 0, 2).repeat(1, src_len, 1)
         
-        # Calculate energy
-        # energy = [batch size, src len, hid dim]
+
+        # [batch size, src len, hid dim]
         energy = torch.tanh(self.attn(torch.cat((hidden, encoder_outputs), dim=2))) 
         
-        # Calculate attention
-        # attention = [batch size, src len, 1]
-        attention = self.v(energy)
+        attention = self.v(energy) # [batch size, src len, 1]
         
-        # Squeeze and softmax
-        # return [batch size, src len]
-        return F.softmax(attention.squeeze(2), dim=1)
+        return F.softmax(attention.squeeze(2), dim=1)  # [batch size, src len]
 
 class Decoder(nn.Module):
     def __init__(self, output_dim, emb_dim, enc_hid_dim, dec_hid_dim, n_layers, dropout, attention):
@@ -119,11 +92,10 @@ class Decoder(nn.Module):
         a = self.attention(hidden[-1].unsqueeze(0), encoder_outputs)
         a = a.unsqueeze(1)
         
-        # weighted = [batch size, 1, enc_hid_dim]
-        weighted = torch.bmm(a, encoder_outputs)
         
-        # rnn_input = [batch size, 1, (emb dim + enc_hid_dim)]
-        rnn_input = torch.cat((embedded, weighted), dim=2)
+        weighted = torch.bmm(a, encoder_outputs) # [batch size, 1, enc_hid_dim]
+        
+        rnn_input = torch.cat((embedded, weighted), dim=2) # [batch size, 1, (emb dim + enc_hid_dim)]
         
         output, hidden = self.rnn(rnn_input, hidden)
         
@@ -157,26 +129,19 @@ class Seq2Seq(nn.Module):
         trg_len = trg.shape[1]
         trg_vocab_size = self.decoder.output_dim
         
-        # Tensor to store decoder outputs
         outputs = torch.zeros(batch_size, trg_len, trg_vocab_size).to(self.device)
         
-        # Encoder forward
         encoder_outputs, hidden = self.encoder(src)
         
-        # First input to decoder is the <sos> token
-        input = trg[:, 0]
+        input = trg[:, 0] # <sos>
         
         for t in range(1, trg_len):
-            # Decoder forward
             output, hidden, _ = self.decoder(input, hidden, encoder_outputs)
             
-            # Store output
             outputs[:, t] = output
             
-            # Decide whether to use teacher forcing
             teacher_force = random.random() < teacher_forcing_ratio
             
-            # Get the highest predicted token
             top1 = output.argmax(1)
             
             # Next input is either ground truth or predicted token

@@ -9,7 +9,6 @@ from .trainer import Trainer, WandbLogger, ConsoleLogger, LocalCheckpointManager
 from .config import DATASETS_DIR, CHECKPOINTS_DIR
 
 
-
 def main():
 
     parser = argparse.ArgumentParser(description='Train Seq2Seq Model')
@@ -35,15 +34,16 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
-    # 1. Data
+
     config = {
         'dataset_dir': args.dataset_dir,
         'batch_size': args.batch_size,
         'max_length': 100,
-        'num_workers': 0
+        'num_workers': 0,
+        'task': "train"
     }
 
-    train_loader, val_loader, test_loader, en_vocab, vi_vocab = build_dataloaders(config)
+    train_loader, val_loader, _ , en_vocab, vi_vocab = build_dataloaders(config)
 
     INPUT_DIM = len(en_vocab)
     OUTPUT_DIM = len(vi_vocab)
@@ -52,7 +52,6 @@ def main():
     print(f"Output Vocab Size: {OUTPUT_DIM}")
 
 
-    # 2. Model
     ENC_HID_DIM = args.hidden_dim
     DEC_HID_DIM = args.hidden_dim
     ENC_OUTPUT_DIM = args.hidden_dim * 2 if args.bidirectional else args.hidden_dim
@@ -66,18 +65,17 @@ def main():
     print(f'The model has {sum(p.numel() for p in model.parameters() if p.requires_grad):,} trainable parameters')
 
 
-    # 3. Optimizer & Criterion
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     
-    # Ignore padding index in loss calculation
     pad_idx = vi_vocab.lookup_token('<pad>')
     criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
 
-    # 4. Logger & Checkpoint Manager
+
     if args.use_wandb:
         logger = WandbLogger(args.project_name, vars(args))
     else:
         logger = ConsoleLogger()
+
 
     checkpoint_manager = LocalCheckpointManager()
     os.makedirs(CHECKPOINTS_DIR, exist_ok=True)
@@ -87,7 +85,7 @@ def main():
         print("Resuming training from checkpoint...")
 
 
-    # 5. Trainer
+
     trainer_config = {
         'clip': args.clip,
         'teacher_forcing_ratio': args.teacher_forcing,
@@ -114,7 +112,7 @@ def main():
         config=trainer_config
     )
 
-    # 6. Start Training
+
     try:
         trainer.show_config()
         trainer.train(args.epochs, save_path=CKP_PATH, en_vocab=en_vocab, vi_vocab=vi_vocab)

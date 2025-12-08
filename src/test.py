@@ -1,7 +1,6 @@
 import torch
 import argparse
 import os
-from pathlib import Path
 from .data_utils import build_dataloaders
 from .model import Encoder, Decoder, Attention, Seq2Seq
 from .evaluator import Evaluator, ResultSaver
@@ -22,6 +21,7 @@ def main():
     parser.add_argument('--beam_size', type=int, default=1, help='Beam size (1 for greedy)')
     parser.add_argument('--length_penalty_alpha', type=float, default=0.7, help='Length penalty alpha')
     parser.add_argument('--bidirectional', action='store_true', help='Use bidirectional encoder')
+    parser.add_argument('--no_repeat_ngram_size', type=int, default=0, help='Size of N-grams to prevent repetition (0 to disable)')
 
     
     args = parser.parse_args()
@@ -29,20 +29,20 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
     
-    # 1. Data
+
     config = {
         'dataset_dir': args.dataset_dir,
         'batch_size': args.batch_size,
         'max_length': 100,
-        'num_workers': 0
+        'num_workers': 0,
+        'task': "test"
     }
-    # We only need test_loader and vocabs
     _, _, test_loader, en_vocab, vi_vocab = build_dataloaders(config)
     
     INPUT_DIM = len(en_vocab)
     OUTPUT_DIM = len(vi_vocab)
     
-    # 2. Model
+    # Model
     ENC_HID_DIM = args.hidden_dim
     DEC_HID_DIM = args.hidden_dim
     ENC_OUTPUT_DIM = args.hidden_dim * 2 if args.bidirectional else args.hidden_dim
@@ -52,23 +52,27 @@ def main():
     dec = Decoder(OUTPUT_DIM, args.emb_dim, ENC_OUTPUT_DIM, DEC_HID_DIM, args.n_layers, args.dropout, attn)
     model = Seq2Seq(enc, dec, device).to(device)
     
-    
+
     CKP_PATH = os.path.join(CHECKPOINTS_DIR, args.checkpoint)
     if os.path.exists(CKP_PATH):
         print(f"Loading checkpoint from {CKP_PATH}...")
         checkpoint = torch.load(CKP_PATH, map_location=device, weights_only=False)
         model.load_state_dict(checkpoint['model_state_dict'])
+        print(f"Loaded model from {CKP_PATH}")
+
     else:
         print(f"Checkpoint {CKP_PATH} not found! Please train the model first.")
         return
 
-    # 3. Evaluate
+
+    # Evaluate
+    evaluator = Evaluator(model, en_vocab, vi_vocab, device)
+
     os.makedirs(RESULTS_DIR, exist_ok=True)
     RESULTS_PATH = os.path.join(RESULTS_DIR, args.output_file)
     saver = ResultSaver(RESULTS_PATH)
-    evaluator = Evaluator(model, en_vocab, vi_vocab, device)
     
-    bleu_score = evaluator.evaluate_batch(test_loader, result_saver=saver, beam_size=args.beam_size, length_penalty_alpha=args.length_penalty_alpha)
+    bleu_score = evaluator.evaluate_batch(test_loader, result_saver=saver, beam_size=args.beam_size, length_penalty_alpha=args.length_penalty_alpha, no_repeat_ngram_size=args.no_repeat_ngram_size)
     
     print(f"\nTest Set BLEU Score: {bleu_score*100:.2f}")
     

@@ -5,7 +5,6 @@ import os
 import pandas as pd
 import re
 from collections import Counter
-import matplotlib.pyplot as plt
 import multiprocessing
 from functools import partial
 
@@ -47,10 +46,7 @@ class Vocabulary:
 
 def load_vocab(file_path):
     vocab = Vocabulary()
-    # Note: The provided vocab files might already contain some special tokens.
-    # We should load them but ensure our standard special tokens are mapped correctly.
-    # If the file has <s> and </s>, we use them.
-    
+ 
     with open(file_path, 'r', encoding='utf-8') as f:
         for line in f:
             word = line.strip()
@@ -59,10 +55,6 @@ def load_vocab(file_path):
     return vocab
 
 def find_html_entities(file_path):
-    """
-    Scans a file for potential HTML entities (e.g., &amp;, &#123;).
-    Returns a set of unique entities found.
-    """
     entities = set()
     # Regex for named entities (&name;) and numeric entities (&#123; or &#x12a;)
     entity_pattern = re.compile(r'&[a-zA-Z]+;|&#[0-9]+;|&#x[0-9a-fA-F]+;')
@@ -74,11 +66,6 @@ def find_html_entities(file_path):
     return entities
 
 def process_line(line):
-    """
-    Helper function for parallel processing.
-    Cleans HTML entities and tokenizes.
-    """
-    # text = html.unescape(line.strip())
     tokens = line.strip().split()
     return tokens
 
@@ -96,11 +83,7 @@ class IWSLTDataset(Dataset):
         with open(vi_path, 'r', encoding='utf-8') as f:
             lines_vi = f.readlines()
             
-        # Parallel processing for large datasets
-        # Note: GPU processing for string manipulation is not standard/efficient in Python.
-        # Multiprocessing is the way to go for CPU-bound text processing.
-        # If "use_gpu_processing" is requested, we clarify that CPU parallel is better for this step.
-        
+
         num_workers = multiprocessing.cpu_count() if use_gpu_processing else 1
         print(f"Processing with {num_workers} workers...")
         
@@ -113,25 +96,14 @@ class IWSLTDataset(Dataset):
             tokens_vi_list = [process_line(line) for line in lines_vi]
 
         for i, (tokens_en, tokens_vi) in enumerate(zip(tokens_en_list, tokens_vi_list)):
-             # Filter by length
             if len(tokens_en) > max_length or len(tokens_vi) > max_length or len(tokens_en) == 0 or len(tokens_vi) == 0:
                 continue
-            
-            # Add SOS and EOS tokens
-            # Encoder input: tokens (EOS is optional, but often helpful)
-            # Decoder input: <sos> tokens
-            # Decoder target: tokens <eos>
-            
-            # Here we just store the full sequence with EOS. 
-            # SOS/EOS handling can be done in collate_fn or model.
-            # Let's append EOS to both for consistency.
             
             indices_en = [en_vocab.lookup_token(t) for t in tokens_en] + [en_vocab.lookup_token('</s>')]
             indices_vi = [vi_vocab.lookup_token('<s>')] + [vi_vocab.lookup_token(t) for t in tokens_vi] + [vi_vocab.lookup_token('</s>')]
             
             self.pairs.append((indices_en, indices_vi))
             
-            # Store a few originals for visualization
             if i < 10:
                 self.original_pairs.append((lines_en[i].strip(), lines_vi[i].strip()))
 
@@ -157,13 +129,10 @@ class IWSLTDataset(Dataset):
         return pd.DataFrame(data)
 
     def analyze_vocab_distribution(self, indices_list, vocab):
-        """
-        Analyzes vocabulary distribution for a list of token indices.
-        """
+
         all_indices = [idx for seq in indices_list for idx in seq]
         counter = Counter(all_indices)
         
-        # Convert to word counts
         word_counts = {vocab.lookup_index(idx): count for idx, count in counter.items()}
         return word_counts
 
@@ -234,17 +203,6 @@ class IWSLTDataset(Dataset):
         print("Export complete.")
 
 
-def collate_fn(batch, pad_idx):
-    src_batch, tgt_batch = [], []
-    for src_sample, tgt_sample in batch:
-        src_batch.append(torch.tensor(src_sample))
-        tgt_batch.append(torch.tensor(tgt_sample))
-        
-    src_batch = torch.nn.utils.rnn.pad_sequence(src_batch, padding_value=pad_idx, batch_first=True)
-    tgt_batch = torch.nn.utils.rnn.pad_sequence(tgt_batch, padding_value=pad_idx, batch_first=True)
-    
-    
-    return src_batch, tgt_batch
 
 def build_dataloaders(config):
     """
@@ -265,6 +223,7 @@ def build_dataloaders(config):
     batch_size = config.get('batch_size', 32)
     max_length = config.get('max_length', 100)
     num_workers = config.get('num_workers', 0)
+    task = config.get('task', 'train')
     
     # Paths
     en_vocab_path = os.path.join(dataset_dir, "vocab.en.txt")
@@ -279,37 +238,31 @@ def build_dataloaders(config):
     test_en_path = os.path.join(dataset_dir, "tst2013.en.txt")
     test_vi_path = os.path.join(dataset_dir, "tst2013.vi.txt")
 
-    processed_en_text_path = os.path.join(dataset_dir, "train.processed.en.txt")
-    processed_vi_text_path = os.path.join(dataset_dir, "train.processed.vi.txt")
+    # processed_en_text_path = os.path.join(dataset_dir, "train.processed.en.txt")
+    # processed_vi_text_path = os.path.join(dataset_dir, "train.processed.vi.txt")
     
-    # 1. Load Vocabularies
+    #
     print("Loading vocabularies...")
     en_vocab = load_vocab(en_vocab_path)
     vi_vocab = load_vocab(vi_vocab_path)
     
-    # 2. Create Datasets
-    # We can use cached processed files if available to speed up loading
-    # For now, we'll load from scratch or let the user handle caching manually via save/load
-    # To keep it simple and robust, we'll check for a common processed file pattern or just load raw.
-    # Given the requirement to "complete" processing, let's implement a simple caching check here?
-    # No, let's stick to explicit loading for clarity, but allow passing a 'use_cache' flag if we wanted.
-    # We will just load raw for now as it's safer.
-    
-    print("Creating Train Dataset...")
-    train_dataset = IWSLTDataset(train_en_path, train_vi_path, en_vocab, vi_vocab, max_length, use_gpu_processing=True)
-    
-    train_dataset.export_to_text(
-        processed_en_text_path,
-        processed_vi_text_path
-    )
 
-    print("Creating Validation Dataset...")
-    # Validation usually doesn't need filtering by length as strictly, but for batching it helps.
-    val_dataset = IWSLTDataset(val_en_path, val_vi_path, en_vocab, vi_vocab, max_length, use_gpu_processing=True)
-    
-    print("Creating Test Dataset...")
-    test_dataset = IWSLTDataset(test_en_path, test_vi_path, en_vocab, vi_vocab, max_length, use_gpu_processing=True)
-    
+    if task == "train":
+        print("Creating Train Dataset...")
+        train_dataset = IWSLTDataset(train_en_path, train_vi_path, en_vocab, vi_vocab, max_length, use_gpu_processing=True)
+        
+        print("Creating Validation Dataset...")
+        # Validation usually doesn't need filtering by length as strictly, but for batching it helps.
+        val_dataset = IWSLTDataset(val_en_path, val_vi_path, en_vocab, vi_vocab, max_length, use_gpu_processing=True)
+    else:
+        print("Creating Test Dataset...")
+        test_dataset = IWSLTDataset(test_en_path, test_vi_path, en_vocab, vi_vocab, max_length, use_gpu_processing=True)
+
+    # train_dataset.export_to_text(
+    #     processed_en_text_path,
+    #     processed_vi_text_path
+    # )
+
     # 3. Create DataLoaders
     pad_idx = en_vocab.lookup_token('<pad>') # Assuming same pad index for both or handled
     # Note: vi_vocab might have different pad index if we didn't force it. 
@@ -329,9 +282,14 @@ def build_dataloaders(config):
     # Update collate_fn to handle separate pad indices
     collate_lambda = lambda b: collate_fn_separate(b, en_pad, vi_pad)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, collate_fn=collate_lambda)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_lambda)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_lambda)
+    train_loader = None
+    val_loader = None
+    test_loader = None
+    if task == 'train':
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, collate_fn=collate_lambda)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_lambda)
+    else:
+        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, collate_fn=collate_lambda)
     
     return train_loader, val_loader, test_loader, en_vocab, vi_vocab
 

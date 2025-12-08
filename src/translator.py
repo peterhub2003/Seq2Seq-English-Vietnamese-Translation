@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from .data_utils import process_line
@@ -12,33 +11,26 @@ class Translator:
         self.device = device
         self.model.eval()
 
-    def translate_sentence(self, sentence, max_len=50, beam_size=1, length_penalty_alpha=0.7):
+    def translate_sentence(self, sentence, max_len=50, beam_size=1, length_penalty_alpha=0.7, no_repeat_ngram_size=0):
         """
-        Translates a single sentence using Greedy or Beam Search.
         Args:
-            sentence (str): Input sentence.
-            max_len (int): Maximum length.
             beam_size (int): 1 for Greedy, > 1 for Beam Search.
             length_penalty_alpha (float): Alpha for length normalization.
         """
 
         tokens = process_line(sentence)
         tokens = tokens + ['</s>']
-        
         src_indexes = [self.en_vocab.lookup_token(token) for token in tokens]
         
-        # Convert to tensor
-        src_tensor = torch.LongTensor(src_indexes).unsqueeze(0).to(self.device)
-        # src_tensor = [1, src_len]
+        src_tensor = torch.LongTensor(src_indexes).unsqueeze(0).to(self.device) # [1, src_len]
         
-        # 2. Forward Encoder
         with torch.no_grad():
             encoder_outputs, hidden = self.model.encoder(src_tensor)
         
         if beam_size == 1:
             return self._greedy_decode(hidden, encoder_outputs, src_indexes, max_len, tokens)
         else:
-            return self._beam_search_decode(hidden, encoder_outputs, src_indexes, max_len, beam_size, length_penalty_alpha, tokens)
+            return self._beam_search_decode(hidden, encoder_outputs, src_indexes, max_len, tokens, length_penalty_alpha, beam_size, no_repeat_ngram_size)
 
 
     def _greedy_decode(self, hidden, encoder_outputs, src_indexes, max_len, src_tokens):
@@ -62,7 +54,7 @@ class Translator:
         
         return self._post_process(trg_indexes, attentions[:len(trg_indexes)-1], src_tokens)
 
-    def _beam_search_decode(self, hidden, encoder_outputs, src_indexes, max_len, beam_size, alpha, src_tokens):
+    def _beam_search_decode(self, hidden, encoder_outputs, src_indexes, max_len, src_tokens, alpha, beam_size, no_repeat_ngram_size=0):
         beams = [(0, [self.vi_vocab.lookup_token('<s>')], hidden, [])]
         
         completed_beams = []
@@ -76,15 +68,39 @@ class Translator:
                     completed_beams.append((score, trg_seq, hid, attns))
                     continue
                 
-                # Decoder Step
+
                 dec_input = torch.LongTensor([trg_seq[-1]]).to(self.device)
                 with torch.no_grad():
                     output, new_hid, attention = self.model.decoder(dec_input, hid, encoder_outputs)
                 
                 # output: [1, vocab_size] -> log_softmax for probabilities
                 log_probs = torch.nn.functional.log_softmax(output, dim=1)
-                
-                # Get top K candidates for this beam
+
+                # --- N-gram---
+                if no_repeat_ngram_size > 0:
+                     # Calculate banned tokens
+                     # We want to ban token 't' if the n-gram (..., t) has appeared already in trg_seq.
+                     # trg_seq is [s1, s2, ..., sk]
+                     # New candidate will be sk+1.
+                     # We check if (sk-(n-2), ..., sk, sk+1) matches any previous n-gram.
+                     # This means we look for the prefix (sk-(n-2), ..., sk) in the history.
+                     
+                     # Check if we have enough context
+                     if len(trg_seq) >= no_repeat_ngram_size - 1:
+                        prefix = tuple(trg_seq[-(no_repeat_ngram_size-1):])
+                         
+                        for i in range(len(trg_seq) - no_repeat_ngram_size + 1):
+                            # Existing n-gram start at i
+                            # The prefix of that n-gram is trg_seq[i : i + n - 1]
+                            existing_prefix = tuple(trg_seq[i : i + no_repeat_ngram_size - 1])
+                             
+                            if existing_prefix == prefix:
+                                # The token that followed this prefix previously is banned
+                                banned_token = trg_seq[i + no_repeat_ngram_size - 1]
+                                log_probs[0, banned_token] = float('-inf')
+
+                # -----------------------------
+
                 topk_probs, topk_ids = log_probs.topk(beam_size)
                 
                 for k in range(beam_size):
@@ -97,7 +113,6 @@ class Translator:
                     
                     candidates.append((new_score, new_seq, new_hid, new_attns))
             
-            # If no candidates (all beams finished), break
             if not candidates:
                 break
                 
@@ -152,9 +167,7 @@ class Translator:
         return " ".join(trg_tokens), attentions[:len(trg_tokens)], src_tokens
 
     def display_attention(self, sentence, translation, attention, save_path=None):
-        """
-        Plots the attention map.
-        """
+
         fig = plt.figure(figsize=(10, 10))
         ax = fig.add_subplot(111)
         
@@ -163,11 +176,11 @@ class Translator:
         cax = ax.matshow(attention, cmap='bone')
         fig.colorbar(cax)
         
-        # Set axes labels
+
         ax.set_xticklabels([''] + sentence, rotation=90)
         ax.set_yticklabels([''] + translation.split())
         
-        # Show label at every tick
+
         ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
         ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
         
